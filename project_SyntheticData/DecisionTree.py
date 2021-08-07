@@ -1,14 +1,12 @@
 import pandas as pd
 
 df = pd.read_csv("C:\data\AdultSalary_header.csv")
-df = df.iloc[:50, :]
+df = df.iloc[:100, :]
+
 
 import math
 from collections import Counter, defaultdict
 from functools import partial
-
-
-# github commit test
 
 
 class DecisionTree():
@@ -85,36 +83,24 @@ class DecisionTree():
         return groups
 
     def _partition_by_con(self, inputs, attribute):
-        Q1 = self.df[attribute].quantile(.25)  # 나중에 효율 따질 때 df 불러오는 거 다시 고려.
+        Q1 = self.df[attribute].quantile(.25)
         Q2 = self.df[attribute].quantile(.5)
         Q3 = self.df[attribute].quantile(.75)
-        groups1 = defaultdict(list)  # q1 담을 곳
-        groups2 = defaultdict(list)  # q2 담을 곳
-        groups3 = defaultdict(list)  # q3 담을 곳
-        for input1 in inputs:
-            if input1[0][attribute] < Q1:
-                key = '%s_lower_Q1' % (attribute)
-                groups1[key].append(input1)
+        groups = defaultdict(list) # q1 담을 곳
+        for input in inputs:
+            if input[0][attribute] <= Q1:
+                key = '%s_lower_Q1' %(attribute)
+                groups[key].append(input)
+            elif input[0][attribute] <= Q2:
+                key = '%s_between_Q1,Q2' %(attribute)
+                groups[key].append(input)
+            elif input[0][attribute] <= Q3:
+                key = '%s_between_Q2,Q3' %(attribute)
+                groups[key].append(input)
             else:
-                key = '%s_upper_Q1' % (attribute)
-                groups1[key].append(input1)
-        for input2 in inputs:
-            if input2[0][attribute] < Q2:
-                key = '%s_lower_Q2' % (attribute)
-                groups2[key].append(input2)
-            else:
-                key = '%s_upper_Q2' % (attribute)
-                groups2[key].append(input2)
-        for input3 in inputs:
-            if input3[0][attribute] < Q3:
-                key = '%s_lower_Q3' % (attribute)
-                groups3[key].append(input3)
-            else:
-                key = '%s_upper_Q3' % (attribute)
-                groups3[key].append(input3)
-        return groups1, groups2, groups3
-
-        # 양적데이터와 카테고리컬 데이터 구분.
+                key = '%s_upper_Q3' %(attribute)
+                groups[key].append(input)
+        return groups
 
     def _split(self):
         df = self.df.iloc[:, :-1]
@@ -133,14 +119,10 @@ class DecisionTree():
     def _partition_entropy_by(self, inputs, attribute):
         if attribute in self._split()[0]:  # 카테고리컬 데이터인 경우.
             partitions = self._partition_by_cat(inputs, attribute)
-            return self._partition_entropy(partitions.values())
-
         elif attribute in self._split()[1]:  # 양적 데이터인 경우.
             partitions = self._partition_by_con(inputs, attribute)
-            t1 = self._partition_entropy(partitions[0].values())
-            t2 = self._partition_entropy(partitions[1].values())
-            t3 = self._partition_entropy(partitions[2].values())
-            return min(t1, t2, t3)
+        return self._partition_entropy(partitions.values())
+
 
     def build_tree(self, inputs, split_candidates=None):
         if split_candidates is None:
@@ -166,30 +148,20 @@ class DecisionTree():
             else:
                 return ' >50K'
 
-        best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))  # 어려워ㅓㅓ
-        print(best_attribute)
+        best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))
+        # print(best_attribute)
 
         if best_attribute in self._split()[0]:  # 카테고리컬일때
             partitions = self._partition_by_cat(inputs, best_attribute)
 
         elif best_attribute in self._split()[1]:  # 양적일때
-            partitions_tuple = self._partition_by_con(inputs, best_attribute)
-            partitions = defaultdict(list)
-            for i in range(3):
-                keys = partitions_tuple[i].keys()  # keys = [upper, lower]
-                for key in keys:
-                    partitions[key] = partitions_tuple[i][key]
-            # return partitions !!!!!!!
-        # print(partitions)
+            partitions = self._partition_by_con(inputs, best_attribute)
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
         # print(new_candidates)
 
         subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in partitions.items()}
 
-        ''' best attribute 가 age이면 return 값이 group123이니까 그것들이 tuple로 묶여서 (group1, group2, group3) 이런식으로 나옴.
-        tuple은 items()가 안먹힘. 그 tuple에서 하나씩 뽑아서 groups하나의 형태로 만들면 됨.
-        '''
 
         if num_class0 >= num_class1:
             subtrees[None] = ' <=50K'
