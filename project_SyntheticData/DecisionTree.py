@@ -116,12 +116,15 @@ class DecisionTree():
                 categorical.append(attributes[i])
         return categorical, continuous
 
-    def _partition_entropy_by(self, inputs, attribute):
+    def _get_partitions(self, inputs, attribute):
         if attribute in self._split()[0]:  # 카테고리컬 데이터인 경우.
             partitions = self._partition_by_cat(inputs, attribute)
         elif attribute in self._split()[1]:  # 양적 데이터인 경우.
             partitions = self._partition_by_con(inputs, attribute)
-        return self._partition_entropy(partitions.values())
+        return partitions
+
+    def _partition_entropy_by(self, inputs, attribute):
+        return self._partition_entropy(self._get_partitions(inputs, attribute).values())
 
 
     def build_tree(self, inputs, split_candidates=None):
@@ -149,18 +152,10 @@ class DecisionTree():
                 return ' >50K'
 
         best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))
-        # print(best_attribute)
-
-        if best_attribute in self._split()[0]:  # 카테고리컬일때
-            partitions = self._partition_by_cat(inputs, best_attribute)
-
-        elif best_attribute in self._split()[1]:  # 양적일때
-            partitions = self._partition_by_con(inputs, best_attribute)
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
-        # print(new_candidates)
 
-        subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in partitions.items()}
+        subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in self._get_partitions(inputs, best_attribute).items()}
 
 
         if num_class0 >= num_class1:
