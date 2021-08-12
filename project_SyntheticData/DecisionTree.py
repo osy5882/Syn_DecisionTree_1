@@ -21,12 +21,11 @@ class DecisionTree():
         return df_dict
 
     # label들을 list로 만듦.
+
     def _labeling(self):
         labels = self.df.iloc[:, -1]
         return labels.to_list()
 
-    # 위의 두 return 값들을 zip함수 사용하여 원하는 데이터 형태인 inputs을 return
-    # 이제 Decisino Tree class에 적용할 수 있는 데이터 형태 만들어짐.
     def comb_data(self):
         data = self._get_data()
         labels = self._labeling()
@@ -34,6 +33,7 @@ class DecisionTree():
         for pair in zip(data, labels):
             inputs.append(pair)
         return inputs
+
 
         # 클래스에 속할 확률 입력하면 엔트로피 구하는 함수
 
@@ -131,7 +131,6 @@ class DecisionTree():
         if split_candidates is None:
             split_candidates = self._split()[0] + self._split()[1]
             num_cand = len(split_candidates)
-            # 전체 attribute의 갯수를 알아야함.
 
         # 얜 지금 이분법 categorical 문제.
         num_inputs = len(inputs)
