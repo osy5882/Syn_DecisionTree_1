@@ -1,7 +1,7 @@
 import pandas as pd
 
 df = pd.read_csv("C:\data\AdultSalary_header.csv")
-df = df.iloc[:100, :]
+df = df.iloc[:30, :]
 
 
 import math
@@ -12,6 +12,7 @@ from functools import partial
 class DecisionTree():
     def __init__(self, df):
         self.df = df
+        self.num_attr = len(df.iloc[0, :])-1
 
     # label 제외하고 dict형태로 변환
     def _get_data(self):
@@ -126,36 +127,43 @@ class DecisionTree():
     def _partition_entropy_by(self, inputs, attribute):
         return self._partition_entropy(self._get_partitions(inputs, attribute).values())
 
-
-    def build_tree(self, inputs, split_candidates=None):
+    def build_tree(self, inputs, split_candidates=None, max_depth=3):
         if split_candidates is None:
-            split_candidates_cat = self._split()[0]  # 여기서 먼저 양적, 카테고리컬 속성 후보 나눔.
-            split_candidates_con = self._split()[1]
-            split_candidates = split_candidates_cat + split_candidates_con
-            # print(split_candidates)
-            # print(split_candidates_cat, split_candidates_con)
+            split_candidates = self._split()[0] + self._split()[1]
+            num_cand = len(split_candidates)
+            # 전체 attribute의 갯수를 알아야함.
 
         # 얜 지금 이분법 categorical 문제.
         num_inputs = len(inputs)
         num_class0 = len([label for _, label in inputs if label == ' <=50K'])
         num_class1 = num_inputs - num_class0
 
-        if num_class0 == 0:
-            return ' >50K'
-        if num_class1 == 0:
-            return ' <=50K'
-
-        if not split_candidates:
+        if self.num_attr-len(split_candidates) == max_depth:
             if num_class0 >= num_class1:
                 return ' <=50K'
             else:
                 return ' >50K'
 
+        else:
+            if num_class0 == 0:
+                return ' >50K'
+            if num_class1 == 0:
+                return ' <=50K'
+
+            if not split_candidates:
+                if num_class0 >= num_class1:
+                    return ' <=50K'
+                else:
+                    return ' >50K'
+
         best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))
+
+        partitions = self._get_partitions(inputs, best_attribute)
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
 
-        subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in self._get_partitions(inputs, best_attribute).items()}
+
+        subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in partitions.items()}
 
 
         if num_class0 >= num_class1:
