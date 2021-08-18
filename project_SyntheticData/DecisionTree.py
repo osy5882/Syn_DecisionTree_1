@@ -1,7 +1,7 @@
 import pandas as pd
 
 df = pd.read_csv("C:\data\AdultSalary_header.csv")
-df = df.iloc[:30, :]
+df = df.iloc[:200, :]
 
 
 import math
@@ -13,6 +13,7 @@ class DecisionTree():
     def __init__(self, df):
         self.df = df
         self.num_attr = len(df.iloc[0, :])-1
+        self.num_labels = len((Counter(self._labeling()).keys()))
 
     # label 제외하고 dict형태로 변환
     def _get_data(self):
@@ -130,30 +131,22 @@ class DecisionTree():
     def build_tree(self, inputs, split_candidates=None, max_depth=3):
         if split_candidates is None:
             split_candidates = self._split()[0] + self._split()[1]
-            num_cand = len(split_candidates)
 
         # 얜 지금 이분법 categorical 문제.
         num_inputs = len(inputs)
         num_class0 = len([label for _, label in inputs if label == ' <=50K'])
         num_class1 = num_inputs - num_class0
 
-        if self.num_attr-len(split_candidates) == max_depth:
-            if num_class0 >= num_class1:
-                return ' <=50K'
-            else:
-                return ' >50K'
+        label_list = [i[1] for i in inputs]
+        keys = list(Counter(label_list).keys())
+        values = list(Counter(label_list).values())
+        half = self.num_labels // 2
 
-        else:
-            if num_class0 == 0:
-                return ' >50K'
-            if num_class1 == 0:
-                return ' <=50K'
+        if self.num_attr-len(split_candidates) == max_depth or len(values) <= half:
+            return (keys[values.index(max(values))])
 
-            if not split_candidates:
-                if num_class0 >= num_class1:
-                    return ' <=50K'
-                else:
-                    return ' >50K'
+        if not split_candidates:
+            return (keys[values.index(max(values))])
 
         best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))
 
@@ -164,11 +157,8 @@ class DecisionTree():
 
         subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in partitions.items()}
 
+        subtrees[None] = (keys[values.index(max(values))])
 
-        if num_class0 >= num_class1:
-            subtrees[None] = ' <=50K'
-        elif num_class0 < num_class1:
-            subtrees[None] = ' >50K'
         return (best_attribute, subtrees)
 
 
