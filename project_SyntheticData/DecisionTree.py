@@ -180,7 +180,7 @@ class Classify():
 
 
 #얘네는 NewDF class에서 갖고 들어올 값(input)
-b = df.iloc[197:198, :-1]
+b = df.iloc[0:1, :-1]
 input = b.to_dict('record')[0]
 
 dtree = DecisionTree(df)
