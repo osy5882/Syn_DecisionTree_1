@@ -164,14 +164,14 @@ class Classify():
 
     def classify_tree(self, tree, input):
         label_list = [i[1] for i in inputs]
-        keys = list(Counter(label_list).keys())   # 전체 레이블 종류를 나타내는 list
+        keys = list(Counter(label_list).keys())
 
-        if tree in keys:  # 마지막에 leaf node 결정할 때 사용되는 코드
+        if tree in keys:
             return tree
 
-        attribute, subtree_dict = tree  # attribute: 분기한 속성, subtree_dict: 분기 결과
+        attribute, subtree_dict = tree
 
-        subtree_key = input.get(attribute)  # dictionary함수에서 attribute에 대응하는 value값을 받아옴.
+        subtree_key = input.get(attribute)
         if subtree_key not in subtree_dict:
             subtree_key = None
 
