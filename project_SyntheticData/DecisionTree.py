@@ -132,11 +132,6 @@ class DecisionTree():
         if split_candidates is None:
             split_candidates = self._split()[0] + self._split()[1]
 
-        # 얜 지금 이분법 categorical 문제.
-        num_inputs = len(inputs)
-        num_class0 = len([label for _, label in inputs if label == ' <=50K'])
-        num_class1 = num_inputs - num_class0
-
         label_list = [i[1] for i in inputs]
         keys = list(Counter(label_list).keys())
         values = list(Counter(label_list).values())
@@ -162,30 +157,42 @@ class DecisionTree():
         return (best_attribute, subtrees)
 
 
-class Classify:
-
-    # def __init__(self, tree, input):
-    #     self.tree = tree
-    #     self.input = input
+class Classify():
+    def __init__(self, df, inputs):
+        self.df = df
+        self.inputs = inputs
 
     def classify_tree(self, tree, input):
-        if tree in [' <=50K', ' >50K']:  # 마지막에 leaf node 결정할 때 사용되는 코드
+        label_list = [i[1] for i in inputs]
+        keys = list(Counter(label_list).keys())   # 전체 레이블 종류를 나타내는 list
+
+        if tree in keys:  # 마지막에 leaf node 결정할 때 사용되는 코드
             return tree
 
-        attribute, subtree_dict = tree  # 위에서 return 받은 (best_attribute, subtrees) 를 받는 것.
+        attribute, subtree_dict = tree  # attribute: 분기한 속성, subtree_dict: 분기 결과
 
-        subtree_key = input.get(attribute)  # dictionary함수에서 key에 대응하는 value값을 받아옴.
+        subtree_key = input.get(attribute)  # dictionary함수에서 attribute에 대응하는 value값을 받아옴.
         if subtree_key not in subtree_dict:
             subtree_key = None
-        # print(subtree_key, end='\n')
 
         subtree = subtree_dict[subtree_key]
         return self.classify_tree(subtree, input)
 
 
-test_dt = DecisionTree(df)
-inputs = test_dt.comb_data()
-tree = test_dt.build_tree(inputs)
+#얘네는 NewDF class에서 갖고 들어올 값(input)
+b = df.iloc[197:198, :-1]
+input = b.to_dict('record')[0]
+
+dtree = DecisionTree(df)
+inputs = dtree.comb_data()
+tree = dtree.build_tree(inputs)
 print(tree)
+
+a = Classify(df, inputs)
+label = a.classify_tree(tree, input)
+print(label)
+
+
+
 
 
