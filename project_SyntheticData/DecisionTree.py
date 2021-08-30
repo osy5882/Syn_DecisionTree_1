@@ -1,7 +1,7 @@
 import pandas as pd
 
 df = pd.read_csv("C:\data\AdultSalary_header.csv")
-df = df.iloc[:200, :]
+df = df.iloc[:10, :]
 
 
 import math
@@ -13,23 +13,23 @@ class DecisionTree():
     def __init__(self, df):
         self.df = df
         self.num_attr = len(df.iloc[0, :])-1
-        self.num_labels = len((Counter(self._labeling()).keys()))
+        self.num_labels = len((Counter(self._labeling(df)).keys()))
 
     # label 제외하고 dict형태로 변환
-    def _get_data(self):
-        adult = self.df.iloc[:, :-1]
+    def _get_data(self, df):
+        adult = df.iloc[:, :-1]
         df_dict = adult.to_dict('record')
         return df_dict
 
     # label들을 list로 만듦.
 
-    def _labeling(self):
-        labels = self.df.iloc[:, -1]
+    def _labeling(self, df):
+        labels = df.iloc[:, -1]
         return labels.to_list()
 
-    def comb_data(self):
-        data = self._get_data()
-        labels = self._labeling()
+    def comb_data(self, df):
+        data = self._get_data(df)
+        labels = self._labeling(df)
         inputs = []
         for pair in zip(data, labels):
             inputs.append(pair)
@@ -104,33 +104,32 @@ class DecisionTree():
                 groups[key].append(input)
         return groups
 
-    def _split(self):
-        df = self.df.iloc[:, :-1]
-        first = self.df.iloc[0, :]
-        attributes = self.df.columns
+    def _split(self, df):
+        df = df.iloc[:, :-1]
+        first = df.iloc[0, :]
+        attributes = df.columns
         continuous = []
         categorical = []
-        for i in range(
-                len(first) - 1):  # 마지막 column 을 빼기위해 range() 에서 -1해줌. 원래는 lable column을 빼줘야함. --> 나중에 재현데이터 할 때 손봐야함.
+        for i in range(len(first) - 1):  # 마지막 column 을 빼기위해 range() 에서 -1해줌. 원래는 lable column을 빼줘야함. --> 나중에 재현데이터 할 때 손봐야함.
             if str(first[i]).isdigit():
                 continuous.append(attributes[i])
             else:
                 categorical.append(attributes[i])
         return categorical, continuous
 
-    def _get_partitions(self, inputs, attribute):
-        if attribute in self._split()[0]:  # 카테고리컬 데이터인 경우.
+    def _get_partitions(self, df, inputs, attribute):
+        if attribute in self._split(df)[0]:  # 카테고리컬 데이터인 경우.
             partitions = self._partition_by_cat(inputs, attribute)
-        elif attribute in self._split()[1]:  # 양적 데이터인 경우.
+        elif attribute in self._split(df)[1]:  # 양적 데이터인 경우.
             partitions = self._partition_by_con(inputs, attribute)
         return partitions
 
-    def _partition_entropy_by(self, inputs, attribute):
-        return self._partition_entropy(self._get_partitions(inputs, attribute).values())
+    def _partition_entropy_by(self, df, inputs, attribute):
+        return self._partition_entropy(self._get_partitions(df, inputs, attribute).values())
 
-    def build_tree(self, inputs, split_candidates=None, max_depth=3):
+    def build_tree(self, df, inputs, split_candidates=None, max_depth=3):
         if split_candidates is None:
-            split_candidates = self._split()[0] + self._split()[1]
+            split_candidates = self._split(df)[0] + self._split(df)[1]
 
         label_list = [i[1] for i in inputs]
         keys = list(Counter(label_list).keys())
@@ -143,14 +142,14 @@ class DecisionTree():
         if not split_candidates:
             return (keys[values.index(max(values))])
 
-        best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, inputs))
+        best_attribute = min(split_candidates, key=partial(self._partition_entropy_by, df, inputs))
 
-        partitions = self._get_partitions(inputs, best_attribute)
+        partitions = self._get_partitions(df, inputs, best_attribute)
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
 
 
-        subtrees = {attribute_value: self.build_tree(subset, new_candidates) for attribute_value, subset in partitions.items()}
+        subtrees = {attribute_value: self.build_tree(df, subset, new_candidates) for attribute_value, subset in partitions.items()}
 
         subtrees[None] = (keys[values.index(max(values))])
 
@@ -162,7 +161,7 @@ class Classify():
         self.df = df
         self.inputs = inputs
 
-    def classify_tree(self, tree, input):
+    def classify_tree(self, tree, input, inputs):
         label_list = [i[1] for i in inputs]
         keys = list(Counter(label_list).keys())
 
@@ -176,23 +175,34 @@ class Classify():
             subtree_key = None
 
         subtree = subtree_dict[subtree_key]
-        return self.classify_tree(subtree, input)
+        return self.classify_tree(subtree, input, inputs)
 
+class SynData(DecisionTree, Classify):
+    def __init__(self, df, **kwargs):
+        super().__init__(df, **kwargs)
+        self.df = df
 
-#얘네는 NewDF class에서 갖고 들어올 값(input)
-b = df.iloc[0:1, :-1]
-input = b.to_dict('record')[0]
+    def get_syndata(self, df):
+        syn_df = pd.DataFrame(index=range(0, df.shape[0]), columns=df.columns.values.tolist())  # df와 크키 같은 빈 df 생성
 
-dtree = DecisionTree(df)
-inputs = dtree.comb_data()
-tree = dtree.build_tree(inputs)
-print(tree)
+        for i in range(df.shape[1]):
+            label = df.columns.values.tolist()[-1]
 
-a = Classify(df, inputs)
-label = a.classify_tree(tree, input)
-print(label)
+            for j in range(df.shape[0]):
+                inputs_df = df.drop([df.index[j]])
+                inputs = self.comb_data(inputs_df)
+                input_df = df.iloc[j:j+1, :-1]
+                input = input_df.to_dict('record')[0]
+                tree = self.build_tree(inputs_df, inputs)
+                value = self.classify_tree(tree, input, inputs)
+                syn_df.loc[j, label] = value
 
+            # label열 맨 앞으로 옮기기
+            new_columns = df.columns.values.tolist()[:-1]
+            new_columns.insert(0, label)
+            df = df[new_columns]
+        return syn_df
 
-
-
-
+syn_data = SynData(df)
+result = syn_data.get_syndata(df)
+print(result)
