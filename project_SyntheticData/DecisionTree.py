@@ -7,6 +7,7 @@ import math
 from collections import Counter, defaultdict
 from functools import partial
 import numpy as np
+import scipy.stats
 
 
 class DecisionTree():
@@ -231,35 +232,38 @@ class SynData(DecisionTree, Classify):
                         for j in df_[df_[label] == i].index:
                             df_.loc[j, 'level'] = "1.0"
 
-                max = [] #레벨 별 최대값 담을거
-                min = [] #레벨 별 최소값 담을거
-                for i in list(df_['level'].unique()):
-                    max.append(df_[df_['level'] == i][label].max())
-                    min.append(df_[df_['level'] == i][label].min())
-                dtype = df_[label].dtype #현재 연속형 변수의 데이터타입
-                df_ = df_.drop([label], axis=1)
+                max = {i: df_[df_['level'] == i][label].max() for i in list(df_['level'].unique())}
+                min = {i: df_[df_['level'] == i][label].min() for i in list(df_['level'].unique())}
+                std = {i: np.std(df_[df_['level'] == i][label]) for i in list(
+                    df_['level'].unique())}
+                mean = {i: df_[df_['level'] == i][label].mean() for i in list(df_['level'].unique())}
+                dtype = df_[label].dtype
+                df_ = df_.drop([label], axis=1)  # 이걸 굳이 할 필요가 있나!?!? 어차피 뒤에 df_ 쓰는게 없는거 같아서!
 
                 for j in range(df_.shape[0]):
                     value = self._get_value(df_, label, j)
                     syn_df.loc[j, label] = value
 
-                syn_df = syn_df.sort_values(by = label)
-                freq = syn_df.groupby(label).size().to_list() #재현데이터의 레벨 별 개수
-                np.random.seed(0) #넣어야 하나 말아야 하나 ?_?
-                rand = [] #난수 담을거
-                for i, j, k in zip(min, max, freq):
-                    rand.append(np.sort(np.random.uniform(i, j, size=k))) #난수 정렬해서 담음
-                if dtype == 'int64': #만약 데이터타입이 정수이면
-                    rand_int = []
-                    for i in rand:
-                        rand_int.append(list(map(int, i))) #정수형으로 바꿔줌, randint 못쓰는 이유가 있어서 이렇게 함 ㅜㅠ(방법 있을수도)
-                    syn_df.drop([label], axis = 1) #재현데이터에 현재 연속형 변수(레벨로 채워져있는거) 삭제
-                    syn_df[label] = np.concatenate(rand_int).tolist() #재현데이터에 현재 연속형 변수(난수로 채워진거) 삽입
+                syn_df = syn_df.sort_values(by=label)
+                syn_level = list(syn_df[label].unique())
+                freq = {i: syn_df.groupby(label).size()[i] for i in syn_level}
+
+                group = defaultdict(list, {i: [min[i], max[i], mean[i], std[i], freq[i]] for i in syn_level})
+
+                np.random.seed(0)  # 넣어야 하나 말아야 하나 ?_?
+                rand = defaultdict(list, {k: [] for k in syn_level})  # 난수 담을거
+                for i, j in group.items():
+                    while len(rand[i]) < j[4]:
+                        x = np.random.normal(j[2], j[3])
+                        if j[0] <= x <= j[1]:
+                            rand[i].append(x)
+                rand_list = [np.sort(i) for i in rand.values()]
+
+                if dtype == 'int64':  # 만약 데이터타입이 정수이면
+                    rand_int = [list(map(int, i)) for i in rand_list]
+                    syn_df[label] = np.concatenate(rand_int)
                 else:
-                    syn_df.drop([label], axis=1)
-                    syn_df[label] = np.concatenate(rand).tolist()
-
-
+                    syn_df[label] = np.concatenate(rand_list)
 
             else:
                 for j in range(df.shape[0]):
@@ -278,3 +282,4 @@ class SynData(DecisionTree, Classify):
 syn_data = SynData(df)
 result = syn_data.get_syndata(df)
 print(result)
+result.to_csv('syn_data.csv')
