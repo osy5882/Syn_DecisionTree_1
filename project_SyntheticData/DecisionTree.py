@@ -3,16 +3,16 @@ import pandas as pd
 df = pd.read_csv("C:\data\AdultSalary_header.csv")
 df = df.iloc[:10, :]
 
-
 import math
 from collections import Counter, defaultdict
 from functools import partial
+import numpy as np
 
 
 class DecisionTree():
     def __init__(self, df):
         self.df = df
-        self.num_attr = len(df.iloc[0, :])-1
+        self.num_attr = len(df.iloc[0, :]) - 1
         self.num_labels = len((Counter(self._labeling(df)).keys()))
 
     # label 제외하고 dict형태로 변환
@@ -35,7 +35,6 @@ class DecisionTree():
             inputs.append(pair)
         return inputs
 
-
         # 클래스에 속할 확률 입력하면 엔트로피 구하는 함수
 
     def _entropy(self, class_probabilities):
@@ -46,8 +45,6 @@ class DecisionTree():
     def _class_probabilities(self, labels):
         total_count = len(labels)
         return [float(count) / float(total_count) for count in Counter(labels).values()]
-        ''' Counter(labels) = {0 : 3, 1 : 2} 이런식으로 나옴. 
-        return값은 0.6, 0.4 이런식으로 나옴.'''
 
     # 노드의 엔트로피 계산하는 메소드
     def _data_entropy(self, labeled_data):
@@ -88,19 +85,19 @@ class DecisionTree():
         Q1 = self.df[attribute].quantile(.25)
         Q2 = self.df[attribute].quantile(.5)
         Q3 = self.df[attribute].quantile(.75)
-        groups = defaultdict(list) # q1 담을 곳
+        groups = defaultdict(list)  # q1 담을 곳
         for input in inputs:
             if input[0][attribute] <= Q1:
-                key = '%s_lower_Q1' %(attribute)
+                key = '%s_lower_Q1' % (attribute)
                 groups[key].append(input)
             elif input[0][attribute] <= Q2:
-                key = '%s_between_Q1,Q2' %(attribute)
+                key = '%s_between_Q1,Q2' % (attribute)
                 groups[key].append(input)
             elif input[0][attribute] <= Q3:
-                key = '%s_between_Q2,Q3' %(attribute)
+                key = '%s_between_Q2,Q3' % (attribute)
                 groups[key].append(input)
             else:
-                key = '%s_upper_Q3' %(attribute)
+                key = '%s_upper_Q3' % (attribute)
                 groups[key].append(input)
         return groups
 
@@ -110,7 +107,7 @@ class DecisionTree():
         attributes = df.columns
         continuous = []
         categorical = []
-        for i in range(len(first) - 1):  # 마지막 column 을 빼기위해 range() 에서 -1해줌. 원래는 lable column을 빼줘야함. --> 나중에 재현데이터 할 때 손봐야함.
+        for i in range(len(first) - 1):
             if str(first[i]).isdigit():
                 continuous.append(attributes[i])
             else:
@@ -136,7 +133,7 @@ class DecisionTree():
         values = list(Counter(label_list).values())
         half = self.num_labels // 2
 
-        if self.num_attr-len(split_candidates) == max_depth or len(values) <= half:
+        if self.num_attr - len(split_candidates) == max_depth or len(values) <= half:
             return (keys[values.index(max(values))])
 
         if not split_candidates:
@@ -148,8 +145,8 @@ class DecisionTree():
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
 
-
-        subtrees = {attribute_value: self.build_tree(df, subset, new_candidates) for attribute_value, subset in partitions.items()}
+        subtrees = {attribute_value: self.build_tree(df, subset, new_candidates) for attribute_value, subset in
+                    partitions.items()}
 
         subtrees[None] = (keys[values.index(max(values))])
 
@@ -177,10 +174,20 @@ class Classify():
         subtree = subtree_dict[subtree_key]
         return self.classify_tree(subtree, input, inputs)
 
+
 class SynData(DecisionTree, Classify):
     def __init__(self, df, **kwargs):
         super().__init__(df, **kwargs)
         self.df = df
+
+    def _get_value(self, df, label, j):
+        inputs_df = df.drop([df.index[j]])
+        inputs = self.comb_data(inputs_df)
+        input_df = df.iloc[j:j + 1, :-1]
+        input = input_df.to_dict('record')[0]
+        tree = self.build_tree(inputs_df, inputs)
+        value = self.classify_tree(tree, input, inputs)
+        return value
 
     def get_syndata(self, df):
         syn_df = pd.DataFrame(index=range(0, df.shape[0]), columns=df.columns.values.tolist())  # df와 크키 같은 빈 df 생성
@@ -188,20 +195,85 @@ class SynData(DecisionTree, Classify):
         for i in range(df.shape[1]):
             label = df.columns.values.tolist()[-1]
 
-            for j in range(df.shape[0]):
-                inputs_df = df.drop([df.index[j]])
-                inputs = self.comb_data(inputs_df)
-                input_df = df.iloc[j:j+1, :-1]
-                input = input_df.to_dict('record')[0]
-                tree = self.build_tree(inputs_df, inputs)
-                value = self.classify_tree(tree, input, inputs)
-                syn_df.loc[j, label] = value
+            df_ = df.copy()
+            if str(df_[label][0]).isdigit():
+                df_["level"] = ""
+                df_ = df_.sort_values(by=label)
+                for i in df_[label].to_list():
+                    if i <= df_[label].quantile(q=0.1):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.1"
+                    elif i <= df_[label].quantile(q=0.2):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.2"
+                    elif i <= df_[label].quantile(q=0.3):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.3"
+                    elif i <= df_[label].quantile(q=0.4):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.4"
+                    elif i <= df_[label].quantile(q=0.5):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.5"
+                    elif i <= df_[label].quantile(q=0.6):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.6"
+                    elif i <= df_[label].quantile(q=0.7):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.7"
+                    elif i <= df_[label].quantile(q=0.8):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.8"
+                    elif i <= df_[label].quantile(q=0.9):
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "0.9"
+                    else:
+                        for j in df_[df_[label] == i].index:
+                            df_.loc[j, 'level'] = "1.0"
+
+                max = [] #레벨 별 최대값 담을거
+                min = [] #레벨 별 최소값 담을거
+                for i in list(df_['level'].unique()):
+                    max.append(df_[df_['level'] == i][label].max())
+                    min.append(df_[df_['level'] == i][label].min())
+                dtype = df_[label].dtype #현재 연속형 변수의 데이터타입
+                df_ = df_.drop([label], axis=1)
+
+                for j in range(df_.shape[0]):
+                    value = self._get_value(df_, label, j)
+                    syn_df.loc[j, label] = value
+
+                syn_df = syn_df.sort_values(by = label)
+                freq = syn_df.groupby(label).size().to_list() #재현데이터의 레벨 별 개수
+                np.random.seed(0) #넣어야 하나 말아야 하나 ?_?
+                rand = [] #난수 담을거
+                for i, j, k in zip(min, max, freq):
+                    rand.append(np.sort(np.random.uniform(i, j, size=k))) #난수 정렬해서 담음
+                if dtype == 'int64': #만약 데이터타입이 정수이면
+                    rand_int = []
+                    for i in rand:
+                        rand_int.append(list(map(int, i))) #정수형으로 바꿔줌, randint 못쓰는 이유가 있어서 이렇게 함 ㅜㅠ(방법 있을수도)
+                    syn_df.drop([label], axis = 1) #재현데이터에 현재 연속형 변수(레벨로 채워져있는거) 삭제
+                    syn_df[label] = np.concatenate(rand_int).tolist() #재현데이터에 현재 연속형 변수(난수로 채워진거) 삽입
+                else:
+                    syn_df.drop([label], axis=1)
+                    syn_df[label] = np.concatenate(rand).tolist()
+
+
+
+            else:
+                for j in range(df.shape[0]):
+                    value = self._get_value(df, label, j)
+                    syn_df.loc[j, label] = value
 
             # label열 맨 앞으로 옮기기
             new_columns = df.columns.values.tolist()[:-1]
             new_columns.insert(0, label)
             df = df[new_columns]
         return syn_df
+
+
+# print(df, '\n')
 
 syn_data = SynData(df)
 result = syn_data.get_syndata(df)
