@@ -13,8 +13,11 @@ import scipy.stats
 class DecisionTree():
     def __init__(self, df):
         self.df = df
+
+    def _get_num(self, df):
         self.num_attr = len(df.iloc[0, :]) - 1
         self.num_labels = len((Counter(self._labeling(df)).keys()))
+        return self.num_attr, self.num_labels
 
     # label 제외하고 dict형태로 변환
     def _get_data(self, df):
@@ -74,11 +77,7 @@ class DecisionTree():
         # categorical_data = self.df[self.split()[0]].to_dict('record')
         # 한번에 inputs를 받아서 카테고리 컬 데이터만 뽑은 다음에 groups를 만들기 근데 이렇게 하기 위해서는 전처리클래스를 상속받아야만 가능함
         for input in inputs:
-            '''
-            ({'age': 39, 'workclass': ' State-gov', 'fnlwgt': 77516, 'education': ' Bachelors', 'edunum': 13, 'marital_status': ' Never-married', 'occupation': ' Adm-clerical', 'relationship': ' Not-in-family', 'race': ' White', 'sex': ' Male', 'capital_gain': 2174, 'capital_loss': 0, 'hours_per_works': 40, 'native_country': ' United-States'}, ' <=50K')
-            얘가 input '''
-            key = input[0][attribute]  # key는 workclass의 value들.
-            # print(key)   # 계속 돌다가 salary_class(레이블임) 까지 가면 에러 뜸.
+            key = input[0][attribute]
             groups[key].append(input)
         return groups
 
@@ -102,14 +101,21 @@ class DecisionTree():
                 groups[key].append(input)
         return groups
 
+    def _isDigit(self, str):
+        try:
+            tmp = float(str)
+            return True
+        except ValueError:
+            return False
+
     def _split(self, df):
         df = df.iloc[:, :-1]
         first = df.iloc[0, :]
         attributes = df.columns
         continuous = []
         categorical = []
-        for i in range(len(first) - 1):
-            if str(first[i]).isdigit():
+        for i in range(len(first)):
+            if self._isDigit(str(first[i])) == True:
                 continuous.append(attributes[i])
             else:
                 categorical.append(attributes[i])
@@ -129,12 +135,14 @@ class DecisionTree():
         if split_candidates is None:
             split_candidates = self._split(df)[0] + self._split(df)[1]
 
+        num_attr, num_labels = self._get_num(df)
+
         label_list = [i[1] for i in inputs]
         keys = list(Counter(label_list).keys())
         values = list(Counter(label_list).values())
-        half = self.num_labels // 2
+        half = num_labels // 2
 
-        if self.num_attr - len(split_candidates) == max_depth or len(values) <= half:
+        if num_attr - len(split_candidates) == max_depth or len(values) <= half:
             return (keys[values.index(max(values))])
 
         if not split_candidates:
@@ -146,8 +154,7 @@ class DecisionTree():
 
         new_candidates = [a for a in split_candidates if a != best_attribute]
 
-        subtrees = {attribute_value: self.build_tree(df, subset, new_candidates) for attribute_value, subset in
-                    partitions.items()}
+        subtrees = {attribute_value: self.build_tree(df, subset, new_candidates) for attribute_value, subset in partitions.items()}
 
         subtrees[None] = (keys[values.index(max(values))])
 
@@ -181,7 +188,7 @@ class SynData(DecisionTree, Classify):
         super().__init__(df, **kwargs)
         self.df = df
 
-    def _get_value(self, df, label, j):
+    def _get_value(self, df, j):
         inputs_df = df.drop([df.index[j]])
         inputs = self.comb_data(inputs_df)
         input_df = df.iloc[j:j + 1, :-1]
@@ -197,7 +204,7 @@ class SynData(DecisionTree, Classify):
             label = df.columns.values.tolist()[-1]
 
             df_ = df.copy()
-            if str(df_[label][0]).isdigit():
+            if self._isDigit(str(df_[label][0])) == True:
                 df_["level"] = ""
                 df_ = df_.sort_values(by=label)
                 for i in df_[label].to_list():
@@ -232,16 +239,15 @@ class SynData(DecisionTree, Classify):
                         for j in df_[df_[label] == i].index:
                             df_.loc[j, 'level'] = "1.0"
 
-                max = {i: df_[df_['level'] == i][label].max() for i in list(df_['level'].unique())}
-                min = {i: df_[df_['level'] == i][label].min() for i in list(df_['level'].unique())}
-                std = {i: np.std(df_[df_['level'] == i][label]) for i in list(
-                    df_['level'].unique())}
-                mean = {i: df_[df_['level'] == i][label].mean() for i in list(df_['level'].unique())}
+                max = {i: np.max(df_[df_['level'] == i][label]) for i in list(df_['level'].unique())}
+                min = {i: np.min(df_[df_['level'] == i][label]) for i in list(df_['level'].unique())}
+                std = {i: np.std(df_[df_['level'] == i][label]) for i in list(df_['level'].unique())}
+                mean = {i: np.mean(df_[df_['level'] == i][label]) for i in list(df_['level'].unique())}
                 dtype = df_[label].dtype
-                df_ = df_.drop([label], axis=1)  # 이걸 굳이 할 필요가 있나!?!? 어차피 뒤에 df_ 쓰는게 없는거 같아서!
+                df_ = df_.drop([label], axis=1)
 
                 for j in range(df_.shape[0]):
-                    value = self._get_value(df_, label, j)
+                    value = self._get_value(df_, j)
                     syn_df.loc[j, label] = value
 
                 syn_df = syn_df.sort_values(by=label)
@@ -250,7 +256,7 @@ class SynData(DecisionTree, Classify):
 
                 group = defaultdict(list, {i: [min[i], max[i], mean[i], std[i], freq[i]] for i in syn_level})
 
-                np.random.seed(0)  # 넣어야 하나 말아야 하나 ?_?
+                np.random.seed(0)
                 rand = defaultdict(list, {k: [] for k in syn_level})  # 난수 담을거
                 for i, j in group.items():
                     while len(rand[i]) < j[4]:
@@ -267,7 +273,7 @@ class SynData(DecisionTree, Classify):
 
             else:
                 for j in range(df.shape[0]):
-                    value = self._get_value(df, label, j)
+                    value = self._get_value(df, j)
                     syn_df.loc[j, label] = value
 
             # label열 맨 앞으로 옮기기
@@ -282,4 +288,4 @@ class SynData(DecisionTree, Classify):
 syn_data = SynData(df)
 result = syn_data.get_syndata(df)
 print(result)
-result.to_csv('syn_data.csv')
+# result.to_csv('syn_data.csv')
